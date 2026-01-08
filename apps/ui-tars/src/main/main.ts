@@ -162,7 +162,6 @@ const initializeApp = async () => {
   logger.info('initializeApp end');
 
   // Check and update remote presets
-  const settings = SettingStore.getStore();
   if (
     settings.presetSource?.type === 'remote' &&
     settings.presetSource.autoUpdate
