@@ -30,6 +30,7 @@ import { registerSettingsHandlers } from './services/settings';
 import { sanitizeState } from './utils/sanitizeState';
 import { windowManager } from './services/windowManager';
 import { checkBrowserAvailability } from './services/browserCheck';
+import { httpServerService } from './services/httpServer';
 
 const { isProd } = env;
 
@@ -91,6 +92,18 @@ const initializeApp = async () => {
   logger.info('createTray');
   // Tray
   await createTray();
+
+  // Initialize HTTP server if enabled
+  const settings = SettingStore.getStore();
+  if (settings.httpServerEnabled) {
+    httpServerService.setConfig({
+      enabled: true,
+      port: settings.httpServerPort,
+      host: settings.httpServerHost,
+      apiKey: settings.httpServerApiKey,
+    });
+    logger.info('HttpServer initialized from settings');
+  }
 
   // Send app launched event
   await UTIOService.getInstance().appLaunched();
