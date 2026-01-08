@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 // /apps/ui-tars/src/renderer/src/pages/settings/index.tsx
-import { RefreshCcw, Trash } from 'lucide-react';
+import { RefreshCcw, Trash, Power, Info } from 'lucide-react';
 import { useRef, useEffect, useState } from 'react';
 import * as z from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -31,6 +31,7 @@ import {
 } from '@renderer/components/ui/select';
 import { ScrollArea } from '@renderer/components/ui/scroll-area';
 import { Input } from '@renderer/components/ui/input';
+import { Switch } from '@renderer/components/ui/switch';
 import { DragArea } from '@renderer/components/Common/drag';
 import { BROWSER_OPERATOR } from '@renderer/const';
 
@@ -57,12 +58,18 @@ const formSchema = z.object({
   searchEngineForBrowser: z.nativeEnum(SearchEngineForSettings),
   reportStorageBaseUrl: z.string().optional(),
   utioBaseUrl: z.string().optional(),
+  // HTTP Server Settings
+  httpServerEnabled: z.boolean().optional(),
+  httpServerPort: z.number().min(1024).max(65535).optional(),
+  httpServerHost: z.string().optional(),
+  httpServerApiKey: z.string().optional(),
 });
 
 const SECTIONS = {
   vlm: 'VLM Settings',
   chat: 'Chat Settings',
   report: 'Report Settings',
+  httpServer: 'HTTP Server',
   general: 'General',
 } as const;
 
@@ -79,6 +86,123 @@ export default function Settings() {
     version: string;
     link: string | null;
   } | null>();
+
+  // HTTP Server state
+  const [serverStatus, setServerStatus] = useState<{
+    running: boolean;
+    message: string | null;
+    error: boolean;
+  }>({
+    running: false,
+    message: null,
+    error: false,
+  });
+
+  // Check HTTP server status on mount
+  useEffect(() => {
+    const checkServerStatus = async () => {
+      try {
+        const config = await api.getHttpServerConfig();
+        setServerStatus({ running: config.enabled, message: null, error: false });
+      } catch {
+        setServerStatus({ running: false, message: null, error: false });
+      }
+    };
+    checkServerStatus();
+  }, []);
+
+  const handleStartHttpServer = async () => {
+    try {
+      const port = form.getValues('httpServerPort') || 9527;
+      const host = form.getValues('httpServerHost') || '127.0.0.1';
+      const apiKey = form.getValues('httpServerApiKey') || '';
+
+      await api.setHttpServerConfig({
+        enabled: true,
+        port,
+        host,
+        apiKey,
+      });
+      setServerStatus({ running: true, message: 'Server started', error: false });
+      toast.success('HTTP Server started', {
+        description: `http://${host}:${port}`,
+      });
+    } catch (error) {
+      setServerStatus({
+        running: false,
+        message: 'Failed to start server',
+        error: true,
+      });
+      toast.error('Failed to start HTTP Server');
+    }
+  };
+
+  const handleStopHttpServer = async () => {
+    try {
+      await api.setHttpServerConfig({ enabled: false });
+      setServerStatus({ running: false, message: 'Server stopped', error: false });
+      toast.success('HTTP Server stopped');
+    } catch (error) {
+      toast.error('Failed to stop HTTP Server');
+    }
+  };
+
+  const handleHttpServerToggle = async (enabled: boolean) => {
+    if (enabled) {
+      await handleStartHttpServer();
+    } else {
+      await handleStopHttpServer();
+    }
+  };
+
+  const handleTestHttpServer = async () => {
+    const port = form.getValues('httpServerPort') || 9527;
+    const host = form.getValues('httpServerHost') || '127.0.0.1';
+    const apiKey = form.getValues('httpServerApiKey');
+
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (apiKey) {
+        headers['X-API-Key'] = apiKey;
+      }
+
+      const response = await fetch(`http://${host}:${port}/health`, {
+        headers,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setServerStatus({
+          running: true,
+          message: `Server is running: ${JSON.stringify(data)}`,
+          error: false,
+        });
+        toast.success('HTTP Server is reachable', {
+          description: `http://${host}:${port}`,
+        });
+      } else {
+        setServerStatus({
+          running: false,
+          message: `Server returned error: ${response.status}`,
+          error: true,
+        });
+        toast.error('HTTP Server returned an error', {
+          description: `Status: ${response.status}`,
+        });
+      }
+    } catch (error) {
+      setServerStatus({
+        running: false,
+        message: 'Cannot connect to server',
+        error: true,
+      });
+      toast.error('Cannot connect to HTTP Server', {
+        description: 'Make sure the server is running',
+      });
+    }
+  };
 
   const handleCheckForUpdates = async () => {
     setUpdateLoading(true);
@@ -127,6 +251,10 @@ export default function Settings() {
       reportStorageBaseUrl: '',
       searchEngineForBrowser: SearchEngineForSettings.GOOGLE,
       utioBaseUrl: '',
+      httpServerEnabled: false,
+      httpServerPort: 9527,
+      httpServerHost: '127.0.0.1',
+      httpServerApiKey: '',
       ...settings,
     },
   });
@@ -143,6 +271,10 @@ export default function Settings() {
         searchEngineForBrowser: settings.searchEngineForBrowser,
         reportStorageBaseUrl: settings.reportStorageBaseUrl,
         utioBaseUrl: settings.utioBaseUrl,
+        httpServerEnabled: settings.httpServerEnabled,
+        httpServerPort: settings.httpServerPort,
+        httpServerHost: settings.httpServerHost,
+        httpServerApiKey: settings.httpServerApiKey,
       });
     }
   }, [settings, form]);
@@ -541,6 +673,142 @@ export default function Settings() {
                     </FormItem>
                   )}
                 />
+                <div className="h-50"></div>
+              </div>
+
+              {/* HTTP Server Settings */}
+              <div
+                id="httpServer"
+                ref={(el) => {
+                  sectionRefs.current.httpServer = el;
+                }}
+                className="space-y-6 pt-6 ml-1 mr-4"
+              >
+                <h2 className="text-lg font-medium">{SECTIONS.httpServer}</h2>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground bg-muted/50 p-3 rounded-md">
+                  <Info className="h-4 w-4" />
+                  <p>
+                    Enable HTTP API server to control the agent via REST
+                    endpoints. Default port: 9527
+                  </p>
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="httpServerEnabled"
+                  render={({ field }) => (
+                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-0.5">
+                        <FormLabel className="text-base">
+                          Enable HTTP Server
+                        </FormLabel>
+                        <p className="text-sm text-muted-foreground">
+                          Allow remote control via HTTP API
+                        </p>
+                      </div>
+                      <FormControl>
+                        <Switch
+                          checked={field.value}
+                          onCheckedChange={(checked) => {
+                            field.onChange(checked);
+                            handleHttpServerToggle(checked);
+                          }}
+                        />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="httpServerPort"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Port</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="9527"
+                          {...field}
+                          value={field.value === 0 ? '' : field.value}
+                          onChange={(e) =>
+                            field.onChange(Number(e.target.value))
+                          }
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="httpServerHost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Host</FormLabel>
+                      <FormControl>
+                        <Input placeholder="127.0.0.1" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="httpServerApiKey"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>API Key (Optional)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="password"
+                          placeholder="Leave empty to disable authentication"
+                          {...field}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTestHttpServer}
+                  >
+                    Test Connection
+                  </Button>
+                  {form.watch('httpServerEnabled') && (
+                    <Button
+                      type="button"
+                      variant={serverStatus.running ? 'destructive' : 'default'}
+                      size="sm"
+                      onClick={
+                        serverStatus.running
+                          ? handleStopHttpServer
+                          : handleStartHttpServer
+                      }
+                    >
+                      <Power className="h-4 w-4 mr-2" />
+                      {serverStatus.running ? 'Stop' : 'Start'}
+                    </Button>
+                  )}
+                </div>
+
+                {serverStatus.message && (
+                  <div
+                    className={`text-sm ${
+                      serverStatus.error ? 'text-red-500' : 'text-green-500'
+                    }`}
+                  >
+                    {serverStatus.message}
+                  </div>
+                )}
+
                 <div className="h-50"></div>
               </div>
 
