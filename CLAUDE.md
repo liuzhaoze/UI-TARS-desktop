@@ -62,7 +62,7 @@ npm run test:e2e            # Run Playwright E2E tests
 
 ### Key Architectural Patterns
 
-**Type-Safe IPC:** Uses `@ui-tars/electron-ipc` for end-to-end typed communication between main and renderer processes. Routes are defined in `apps/ui-tars/src/main/ipcRoutes.ts` and registered with `registerIpcMain()`.
+**Type-Safe IPC:** Uses `@ui-tars/electron-ipc` for end-to-end typed communication between main and renderer processes. Routes are defined in `apps/ui-tars/src/main/ipcRoutes/` and registered with `registerIpcMain()`.
 
 **Operator Pattern:** The `@ui-tars/sdk` defines abstract `Operator` and `Model` classes. Operators handle screenshot/execute actions, Models handle VLM inference. Concrete implementations:
 - `@ui-tars/operator-nut-js` - Local computer control via nut.js
@@ -72,7 +72,9 @@ npm run test:e2e            # Run Playwright E2E tests
 
 **State Management:**
 - Renderer: Zustand stores for runtime state
-- Main: ElectronStore for persistent user settings
+- Main: ElectronStore for persistent user settings (see `store/setting.ts`)
+
+**HTTP API:** Built-in HTTP server (default port 9527) for remote control via REST API. See `services/httpServer.ts` for endpoints. Controlled by settings: `httpServerEnabled`, `httpServerPort`, `httpServerHost`, `httpServerApiKey`.
 
 **Routes:** Main app routes are `/` (home), `/local` (local computer), `/free-remote` (remote operator), `/widget` (widget interface)
 
@@ -104,3 +106,30 @@ npm run test:e2e            # Run Playwright E2E tests
 When running in development on macOS, ensure your terminal (iTerm2, Terminal) has these permissions:
 - System Settings → Privacy & Security → Accessibility
 - System Settings → Privacy & Security → Screen Recording
+
+## HTTP API
+
+The desktop app includes an HTTP server for remote control. Enable it via settings (`httpServerEnabled: true`).
+
+**Endpoints:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/health` | Health check, returns agent status |
+| GET | `/status` | Get current agent state and message count |
+| POST | `/run` | Start agent with instructions |
+| POST | `/stop` | Stop running agent |
+
+**Example usage:**
+```bash
+# Execute instruction
+curl -X POST http://127.0.0.1:9527/run \
+  -H "Content-Type: application/json" \
+  -d '{"instructions": "Open Calculator app"}'
+
+# With API key authentication
+curl -X POST http://127.0.0.1:9527/run \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-secret-key" \
+  -d '{"instructions": "Open Calculator app"}'
+```
