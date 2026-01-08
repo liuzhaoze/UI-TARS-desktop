@@ -251,7 +251,7 @@ export default function Settings() {
       reportStorageBaseUrl: '',
       searchEngineForBrowser: SearchEngineForSettings.GOOGLE,
       utioBaseUrl: '',
-      httpServerEnabled: false,
+      httpServerEnabled: true,
       httpServerPort: 9527,
       httpServerHost: '127.0.0.1',
       httpServerApiKey: '',

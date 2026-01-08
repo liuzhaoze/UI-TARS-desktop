@@ -30,7 +30,7 @@ export const DEFAULT_SETTING: LocalStore = {
   operator: Operator.LocalComputer,
   reportStorageBaseUrl: '',
   utioBaseUrl: '',
-  httpServerEnabled: false,
+  httpServerEnabled: true,
   httpServerPort: 9527,
   httpServerHost: '127.0.0.1',
   httpServerApiKey: '',
